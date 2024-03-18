@@ -1,0 +1,5 @@
+curl -X GET "http://app-host-domain-or-ip:8000/traffic-data/?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}"
+
+curl -X GET "http://app-host-domain-or-ip:8000/traffic-data-ngsild/?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}&time_delta={TIME_IN_SECONDS}"
+
+curl -X GET "http://app-host-domain-or-ip:8000/traffic-data-csv/?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}"
