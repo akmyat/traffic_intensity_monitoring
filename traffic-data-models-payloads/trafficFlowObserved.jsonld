@@ -1,0 +1,27 @@
+http POST http://localhost:8080/ngsi-ld/v1/entities Content-Type:application/ld+json <<< '
+{
+    "id": "urn:ngsi-ld:TrafficFlowObserved:France-ILM-9213-D69",
+    "type": "TrafficFlowObserved",
+    "refRoad": {
+        "type": "Relationship",
+        "object": "urn:ngsi-ld:Road:France-ILM-92130-D69"
+    },
+    "temporalResolution": {
+        "type": "Property",
+        "value": "PT1H"
+    },
+    "averageVehicleSpeed": {
+        "type": "Property",
+        "observedAt": "2024-03-18T23:17:00Z",
+        "value": 8.631936,
+        "unitCode": "KMH"
+    },
+    "intensity": {
+    	"type": "Property",
+    	"observedAt": "2024-03-18T23:17:00Z",
+    	"value": 0.86368064,
+    	"unitCode": "P1"
+    },
+    "@context": ["https://easy-global-market.github.io/c2jn-data-models/jsonld-contexts/c2jn-compound.jsonld"]
+}
+'

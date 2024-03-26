@@ -1,0 +1,43 @@
+http POST http://localhost:8080/ngsi-ld/v1/entities Content-Type:application/ld+json <<< '
+{
+    "id": "urn:ngsi-ld:Road:France-ILM-92130-D69",
+    "type": "Road",
+    "description": {
+        "type": "Property",
+        "value": "Le boulevard Gallieni est une voie du 15e arrondissement de Paris, en France."
+    },
+    "length": {
+        "type": "Property",
+        "value": 400
+    },
+    "name": {
+        "type": "Property",
+        "value": "Boulevard Gallieni"
+    },
+    "location": {
+        "type": "GeoProperty",
+        "value": {
+            "type": "MultiLineString",
+            "coordinates": [
+                [
+                    [2.267071, 48.833375], 
+                    [2.267494, 48.828622],
+                    [2.267994, 48.822700]
+                ]
+            ]
+        }
+    },      
+    "responsible": {
+        "type": "Property",
+        "value": "lAgence de Financement des Infrastructures de Transport de France (AFIT France)"
+    },
+    "roadClass": {
+        "type": "Property",
+        "value": "secondary"
+    },
+    "@context": [
+        "https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context.jsonld",
+        "https://raw.githubusercontent.com/smart-data-models/dataModel.Transportation/master/context.jsonld"
+    ]
+}
+'

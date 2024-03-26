@@ -1,0 +1,29 @@
+CREATE
+------
+http POST http://localhost:8080/ngsi-ld/v1/entities Content-Type:application/ld+json <<< '{JSON-LD Data}'
+
+DELETE
+------
+http DELETE http://localhost:8080/ngsi-ld/v1/entities/{ID}
+
+
+CRUD Operation for TrafficFlowObserved
+======================================
+
+CREATE
+------
+http POST http://localhost:8080/ngsi-ld/v1/entities Content-Type:application/ld+json <<< '{JSON-LD Data}'
+
+DELETE
+------
+http DELETE http://localhost:8080/ngsi-ld/v1/entities/{ID}
+
+PATCH
+=====
+http PATCH http://localhost:8080/ngsi-ld/v1/entities/{ID}/attrs Link:$CONTEXT_LINK <<< '{JSON-LD}
+
+READ
+====
+export CONTEXT_LINK="<https://easy-global-market.github.io/c2jn-data-models/jsonld-contexts/c2jn-compound.jsonld>; rel=\"http://www.w3.org/ns/json-ld#context\"; type=\"application/ld+json\""
+
+http http://localhost:8080/ngsi-ld/v1/temporal/entities/{ID} timerel==between timeAt=={START TIME} endTimeAt=={END TIME} Link:$CONTEXT_LINK
