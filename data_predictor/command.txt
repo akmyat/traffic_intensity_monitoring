@@ -1,0 +1,28 @@
+GET data for Specified Datetime from Broker
+-------------------------------------------
+curl -X GET "http://app-host-domain-or-ip:9000/get_csv?start_time={START_TIME}&end_time={END_TIME}&id={ID}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}"
+
+Train Traffic Intensity Predictor Model with Given Datetime Data
+----------------------------------------------------------------
+curl -X GET "http://app-host-domain-or-ip:9000/train_traffic_intensity_model?start_time={START_TIME}&end_time={END_TIME}&id={ID}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}"
+
+Train Average Vehicle Speed Model with Given Datetime Data
+----------------------------------------------------------------
+curl -X GET "http://app-host-domain-or-ip:9000/train_average_vehicle_speed_model?start_time={START_TIME}&end_time={END_TIME}&id={ID}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}"
+
+Predict Traffic Intensity Using Pretrained Model for New Specified Datetime Data
+--------------------------------------------------------------------------------
+curl -X GET "http://app-host-domain-or-ip:9000/predict_traffic_intensity?start_time={START_TIME}&end_time={END_TIME}&id={ID}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}"
+
+Predict Average Vehicle Speed Using Pretrained Model for New Specified Datetime Data
+--------------------------------------------------------------------------------
+curl -X GET "http://app-host-domain-or-ip:9000/predict_average_vehicle_speed?start_time={START_TIME}&end_time={END_TIME}&id={ID}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}"
+
+
+Plot Traffic Intensity Results Using Pretrained Model for New Specified Datetime Data
+--------------------------------------------------------------------------------
+curl -X GET "http://app-host-domain-or-ip:9000/plot_traffic_intensity?start_time={START_TIME}&end_time={END_TIME}&id={ID}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}"
+
+Plot Average Vehicle Speed Results Using Pretrained Model for New Specified Datetime Data
+--------------------------------------------------------------------------------
+curl -X GET "http://app-host-domain-or-ip:9000/plot_average_vehicle_speed?start_time={START_TIME}&end_time={END_TIME}&id={ID}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}"
