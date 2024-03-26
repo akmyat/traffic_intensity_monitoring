@@ -1,0 +1,3 @@
+Upload CSV File to Broker
+-------------------------
+curl -X POST "http://app-host-domain-or-ip:8000/upload-csv-to-broker?broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}" -F "file=@{/path/to/file.csv}"
