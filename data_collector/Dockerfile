@@ -12,7 +12,7 @@ RUN pip install -U pip setuptools \
 
 
 # Expose the port on which the application run
-EXPOSE 8000
+EXPOSE 7000
 
 # RUN Application
 CMD ["python3", "main.py"]

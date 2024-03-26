@@ -1,5 +1,24 @@
-curl -X GET "http://app-host-domain-or-ip:8000/traffic-data/?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}"
+GET Dict Data
+-------------
+curl -X GET "http://app-host-domain-or-ip:7000/traffic-data?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}"
 
-curl -X GET "http://app-host-domain-or-ip:8000/traffic-data-ngsild/?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}&time_delta={TIME_IN_SECONDS}"
+GET JSON-LD Data
+----------------
+curl -X GET "http://app-host-domain-or-ip:7000/traffic-data-ngsild?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}&time_delta={TIME_IN_SECONDS}"
 
-curl -X GET "http://app-host-domain-or-ip:8000/traffic-data-csv/?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}"
+GET save to CSV file
+--------------------
+curl -X GET "http://app-host-domain-or-ip:7000/traffic-data-csv?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}"
+
+Push JSON-LD to Broker
+----------------------
+curl -X GET "http://app-host-domain-or-ip:7000/traffic-data-broker?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}"
+
+Start Logging JSON-LD Data to Broker
+------------------------------------
+curl -X GET "http://app-host-domain-or-ip:7000/start-traffic-data-logging?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}&time_delta={FREQUENCY_IN_MINS}"
+
+
+Stop Logging JSON-LD Data to Broker
+-----------------------------------
+curl -X GET "http://app-host-domain-or-ip:7000/stop-traffic-data-logging"
