@@ -6,10 +6,6 @@ GET JSON-LD Data
 ----------------
 curl -X GET "http://app-host-domain-or-ip:7000/traffic-data-ngsild?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}&time_delta={TIME_IN_SECONDS}"
 
-GET save to CSV file
---------------------
-curl -X GET "http://app-host-domain-or-ip:7000/traffic-data-csv?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}"
-
 Push JSON-LD to Broker
 ----------------------
 curl -X GET "http://app-host-domain-or-ip:7000/traffic-data-broker?api_key={Google_API_KEY}&origin_coordinates={ORIGIN_COORDINATES}&destination_coordinates={DESTINATION_COORDINATE}&broker_address={BROKER_ADDRESS}&broker_port={BROKER_PORT}"

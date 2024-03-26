@@ -42,7 +42,8 @@ def fetch_data(
 
     origin_address = data["origin_addresses"][0]
     (_, origin_road, origin_postal_code, origin_city, origin_country) = re.match(
-        r"(\d+)\s([\w\s]+),\s(\d+)\s([\w\-]+),\s([\w]+)", origin_address
+        r"(\d+[A-Za-z]*)\s+([\w\s]+?),\s+(\d+)\s+([\w-]+(?:\s[\w-]+)*),\s+([A-Za-z]+)",
+        origin_address,
     ).groups()
 
     destination_address = data["destination_addresses"][0]
@@ -53,9 +54,10 @@ def fetch_data(
         destination_city,
         destination_country,
     ) = re.match(
-        r"(\d+)\s([\w\s]+),\s(\d+)\s([\w\-]+),\s([\w]+)",
+        r"(\d+[A-Za-z]*)\s+([\w\s]+?),\s+(\d+)\s+([\w-]+(?:\s[\w-]+)*),\s+([A-Za-z]+)",
         destination_address,
     ).groups()
+    # r"(\d+)\s([\w\s]+),\s(\d+)\s([\w\-]+),\s([\w]+)"
 
     # Extract distance, duration and calculate speed
     distance_text = data["rows"][0]["elements"][0]["distance"]["text"]
@@ -247,21 +249,6 @@ async def get_traffic_data_ngsild(
         return {"message": "Failed to fetch data."}
 
 
-@app.get("/traffic-data-csv")
-async def get_traffic_data(
-    api_key: str, origin_coordinates: str, destination_coordinates: str
-):
-    if not api_key or not origin_coordinates or not destination_coordinates:
-        raise HTTPException(status_code=400, detail="Missing required parameters")
-
-    try:
-        data = fetch_data(api_key, origin_coordinates, destination_coordinates)
-        write_to_csv(data, "/tmp/csv/data.csv")
-        return data
-    except:
-        return {"message": "Failed to fetch data."}
-
-
 @app.get("/traffic-data-broker")
 async def get_traffic_data_broker(
     api_key: str,
@@ -324,7 +311,6 @@ async def traffic_data_logging_task(
 ):
     global loop_status
     while loop_status:
-        print("OK")
         await get_traffic_data_broker(
             api_key,
             origin_coordinates,
