@@ -264,7 +264,7 @@ async def train_traffic_intensity_model(
     if data is not None:
         combined_dataframe = extract_data(data)
         daily_data = combined_dataframe.drop(columns=["averageVehicleSpeed"])
-        intensity_model = train_traffic_intensity(daily_data, save=True)
+        intensity_model = train_traffic_intensity(daily_data, save=False)
         return {"message": "Successfuly train model for traffic intensity prediction."}
     else:
         return {"message": "Failed to get data or data not available."}
@@ -296,7 +296,7 @@ async def train_average_vehicle_speed_model(
     if data is not None:
         combined_dataframe = extract_data(data)
         daily_data = combined_dataframe.drop(columns=["intensity"])
-        avgvspeed_model = train_average_vehicle_speed(daily_data, save=True)
+        avgvspeed_model = train_average_vehicle_speed(daily_data, save=False)
         return {
             "message": "Successfuly train model for average vehicle speed prediction."
         }
@@ -335,7 +335,7 @@ async def predict_traffic_intensity(
         combined_dataframe = extract_data(data)
         daily_data = combined_dataframe.drop(columns=["averageVehicleSpeed"])
         forecast_24hr_df = predict_next_day_traffic_intensity(
-            intensity_model, daily_data, save=True
+            intensity_model, daily_data, save=False
         )
         forecast_24hr_df.to_csv(stream)
         stream.seek(0)
@@ -379,7 +379,7 @@ async def predict_average_vehicle_speed(
         combined_dataframe = extract_data(data)
         daily_data = combined_dataframe.drop(columns=["averageVehicleSpeed"])
         forecast_24hr_df = predict_next_day_average_vehicle_speed(
-            avgvspeed_model, daily_data, save=True
+            avgvspeed_model, daily_data, save=False
         )
         forecast_24hr_df.to_csv(stream)
         stream.seek(0)
@@ -423,7 +423,7 @@ async def predict_traffic_intensity(
         combined_dataframe = extract_data(data)
         daily_data = combined_dataframe.drop(columns=["averageVehicleSpeed"])
         forecast_24hr_df = predict_next_day_traffic_intensity(
-            intensity_model, daily_data, save=True
+            intensity_model, daily_data, save=False
         )
 
         plt.figure(figsize=(12, 6))
@@ -481,7 +481,7 @@ async def predict_average_vehicle_speed(
         combined_dataframe = extract_data(data)
         daily_data = combined_dataframe.drop(columns=["averageVehicleSpeed"])
         forecast_24hr_df = predict_next_day_average_vehicle_speed(
-            avgvspeed_model, daily_data, save=True
+            avgvspeed_model, daily_data, save=False
         )
 
         plt.figure(figsize=(12, 6))
@@ -508,6 +508,5 @@ async def predict_average_vehicle_speed(
         return {"message": "Failed to get data or data not available."}
 
 
-# plot_next_day_average_vehicle_speed(forecast_24hr_df, save=True)
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=9000)
