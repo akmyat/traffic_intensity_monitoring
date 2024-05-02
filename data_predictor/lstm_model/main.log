@@ -1,0 +1,8 @@
+DEBUG:asyncio:Using selector: EpollSelector
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): sso.c2jn.fr:443
+DEBUG:urllib3.connectionpool:https://sso.c2jn.fr:443 "POST /auth/realms/smart-city/protocol/openid-connect/token HTTP/1.1" 200 1418
+DEBUG:root:200
+DEBUG:root:https://api-gw.stellio.c2jn.fr/ngsi-ld/v1/temporal/entities/urn:ngsi-ld:TrafficFlowObserved:ILM_92130_2385?timerel=after&timeAt=2023-05-01T07:00:00Z&options=temporalValues
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api-gw.stellio.c2jn.fr:443
+DEBUG:urllib3.connectionpool:https://api-gw.stellio.c2jn.fr:443 "GET /ngsi-ld/v1/temporal/entities/urn:ngsi-ld:TrafficFlowObserved:ILM_92130_2385?timerel=after&timeAt=2023-05-01T07:00:00Z&options=temporalValues HTTP/1.1" 200 1909894
+DEBUG:root:200
