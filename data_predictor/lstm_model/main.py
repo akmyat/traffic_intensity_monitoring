@@ -1,38 +1,32 @@
-import numpy as np
-import pandas as pd
-from pandas.core.api import DataFrame
-import matplotlib.pyplot as plt
-
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
-from tensorflow.keras.optimizers import Adam
-import tensorflow as tf
+from operator import ge
+from model import EcomobLSTMmodel, model_path
 
 import requests
 
-import io
-import pickle
-from datetime import datetime
-
-from fastapi import FastAPI, HTTPException, Response
-from fastapi import BackgroundTasks
+from fastapi import FastAPI, HTTPException, Response, BackgroundTasks
 import uvicorn
 from typing import Optional
 
-import logging
+import os
+import sys
+import pandas as pd
+from pandas.core.api import DataFrame
 
-# Logging Config
-logging.basicConfig(filename="main.log", level=logging.DEBUG)
+import uuid
+import json
+
+# Global
+MODEL_PATH = os.environ.get("MODEL_PATH", None)
+CLIENT_ID = os.environ.get("CLIENT_ID", None)
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET", None)
+ACCESS_TOKEN = None
+MODEL_ID = os.environ.get("MODEL_ID", None)
 
 
-# Global Variable
-ecomob_model = None
+# Ecomob
+def authenticate(client_id, client_secret):
+    global ACCESS_TOKEN
 
-
-def fetch_data_c2jn_broker(
-    client_id: str, client_secret: str, area_code: str, timeAt: str
-):
     auth_url = (
         "https://sso.c2jn.fr/auth/realms/smart-city/protocol/openid-connect/token"
     )
@@ -45,30 +39,48 @@ def fetch_data_c2jn_broker(
         "client_secret": client_secret,
         "grant_type": "client_credentials",
     }
-
     try:
         response = requests.post(auth_url, headers=headers, data=body)
-        logging.debug(response.status_code)
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Authentication Failed.")
+
         response_json = response.json()
         access_token = response_json["access_token"]
+        ACCESS_TOKEN = access_token
+        return True
+    except HTTPException:
+        print("Authentication Failed.")
+        return False
 
-        api_url = f"https://api-gw.stellio.c2jn.fr/ngsi-ld/v1/temporal/entities/urn:ngsi-ld:TrafficFlowObserved:{area_code}?timerel=after&timeAt={timeAt}&options=temporalValues"
-        logging.debug(api_url)
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "NGSILD-Tenant": "urn:ngsi-ld:tenant:smart-city",
-        }
 
-        try:
-            response = requests.get(api_url, headers=headers)
-            logging.debug(response.status_code)
-            data = response.json()
-            return data
-        except requests.HTTPError:
-            print("Failed to get data.")
+def fetch_data_c2jn_broker(area_code: str, timeAt: str):
+    global ACCESS_TOKEN
+    authenticate(CLIENT_ID, CLIENT_SECRET)
+    access_token = ACCESS_TOKEN
 
-    except requests.HTTPError:
-        print("Failed to authenticate.")
+    if access_token is None:
+        print("Authenticate first")
+        return None
+
+    api_url = f"https://api-gw.stellio.c2jn.fr/ngsi-ld/v1/temporal/entities/urn:ngsi-ld:TrafficFlowObserved:{area_code}?timerel=after&timeAt={timeAt}&options=temporalValues"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "NGSILD-Tenant": "urn:ngsi-ld:tenant:smart-city",
+    }
+
+    try:
+        response = requests.get(api_url, headers=headers)
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to get data.")
+
+        data = response.json()
+        return data
+
+    except HTTPException:
+        print("Failed to get data.")
+        return None
 
 
 def parse_ecomob_data(data):
@@ -136,137 +148,36 @@ def parse_ecomob_data(data):
             "CO2Equivalent": co2_equivalent,
             "AverageVehicleSpeed": average_vehicle_speed,
         }
+    df["DateTime"] = pd.to_datetime(df["DateTime"]).dt.tz_localize(None)
+    df.set_index("DateTime", inplace=True)
     return df
 
 
-def train_Ecomob_LSTM_model(
-    ecomob_data: DataFrame, epochs=20, batch_size=1, look_back=72, save=False
-):
-    global ecomob_model
-
-    df = ecomob_data.copy()
-    df["DateTime"] = pd.to_datetime(df["DateTime"]).dt.tz_localize(None)
-    df.set_index("DateTime", inplace=True)
-
-    # Normalize data
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_data = scaler.fit_transform(df)
-
-    # Function to create dataset matrix
-    def create_dataset(dataset, look_back=1):
-        X, Y = [], []
-        for i in range(len(dataset) - look_back):
-            a = dataset[i : (i + look_back), :]
-            X.append(a)
-            Y.append(dataset[i + look_back, :])
-        return np.array(X), np.array(Y)
-
-    X, Y = create_dataset(scaled_data, look_back)
-
-    # Reshape input to be [samples, time steps, features]
-    X_train = X.reshape((X.shape[0], look_back, df.shape[1]))
-    Y_train = Y
-
-    # Custom loss function to handle the relationship between vehicle counts and speeds
-    def custom_loss(y_true, y_pred):
-        vehicle_counts = tf.reduce_sum(y_true[:, :-1], axis=1)
-        speeds = y_true[:, -1]
-        predicted_speeds = y_pred[:, -1]
-        speed_loss = tf.where(
-            vehicle_counts >= tf.reduce_mean(vehicle_counts),
-            (speeds - predicted_speeds) ** 2,
-            tf.abs(predicted_speeds - speeds),
-        )
-        count_loss = tf.reduce_mean(tf.square(y_true[:, :-1] - y_pred[:, :-1]), axis=1)
-        return tf.reduce_mean(speed_loss + count_loss)
-
-    # Build the LSTM model
-    model = Sequential(
-        [
-            LSTM(60, return_sequences=True, input_shape=(look_back, df.shape[1])),
-            LSTM(60),
-            Dense(df.shape[1]),
-        ]
-    )
-    model.compile(optimizer=Adam(learning_rate=0.01), loss=custom_loss)
-
-    model.fit(X_train, Y_train, epochs=epochs, batch_size=batch_size, verbose=2)
-
-    if save:
-        model_name = f"lstm_model_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.keras"
-        model.save(model_name)
-    ecomob_model = model
-
-
-def predict_next_day_with_Ecomob_model(model, ecomob_data, look_back, model_path=None):
-    df = ecomob_data.copy()
-    df["DateTime"] = pd.to_datetime(df["DateTime"]).dt.tz_localize(None)
-    df.set_index("DateTime", inplace=True)
-
-    # Normalize data
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    scaled_data = scaler.fit_transform(df)
-
-    def custom_loss(y_true, y_pred):
-        vehicle_counts = tf.reduce_sum(y_true[:, :-1], axis=1)
-        speeds = y_true[:, -1]
-        predicted_speeds = y_pred[:, -1]
-        speed_loss = tf.where(
-            vehicle_counts >= tf.reduce_mean(vehicle_counts),
-            (speeds - predicted_speeds) ** 2,
-            tf.abs(predicted_speeds - speeds),
-        )
-        count_loss = tf.reduce_mean(tf.square(y_true[:, :-1] - y_pred[:, :-1]), axis=1)
-        return tf.reduce_mean(speed_loss + count_loss)
-
-    if model_path is not None:
-        model = tf.keras.models.load_model(
-            model_path, custom_objects={"custom_loss": custom_loss}
-        )
-
-    predictions = []
-    last_known_data = scaled_data[-look_back:]
-    for _ in range(24):
-        last_known_data = last_known_data.reshape((1, look_back, df.shape[1]))
-        prediction = model.predict(last_known_data)
-        prediction = np.abs(prediction)
-        predictions.append(prediction[0])
-        last_known_data = np.append(
-            last_known_data[:, 1:, :], prediction.reshape((1, 1, df.shape[1])), axis=1
-        )
-
-    # Invert the prediction to the original scaled
-    predictions = scaler.inverse_transform(predictions)
-    prediction_dates = pd.date_range(start=df.index[-1], periods=24, freq="h")
-
-    # Create DataFrame for the predictions
-    predictions_df = pd.DataFrame(
-        predictions, index=prediction_dates, columns=df.columns
-    )
-    predictions_df.reset_index(inplace=True)
-    predictions_df.rename(columns={"index": "DateTime"}, inplace=True)
-    return predictions_df
-
-
-def data_convert_to_ngsild(data: DataFrame, area_code: str):
+def data_convert_to_ngsild(data: DataFrame, area_code: str, model_id: str):
     df = data.copy()
 
     def format_datetime(dt):
         return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
+    def generate_uuid(index):
+        if index == 0:
+            return ""
+        else:
+            return ":" + str(uuid.uuid4()).upper()
+
     # Initialize the main structure
     traffic_data = {
-        "id": f"urn:ngsi-ld:TrafficFlowObserved:{area_code}",
-        "type": "TrafficFlowObserved",
-        "refRoad": {
-            "type": "Relationship",
-            "object": f"urn:ngsi-ld:Road:{area_code}",
-        },
-        "temporalResolution": {"type": "Property", "value": "PT1H"},
-        "predictedAverageVehicleSpeed": [],
-        "predictedCongestionIndex": [],
+        # "id": f"urn:ngsi-ld:TrafficFlowObserved:{area_code}",
+        # "type": "TrafficFlowObserved",
+        # "refRoad": {
+        #     "type": "Relationship",
+        #     "object": f"urn:ngsi-ld:Road:{area_code}",
+        # },
+        # "temporalResolution": {"type": "Property", "value": "PT1H"},
+        # "predictedAverageVehicleSpeed": [],
+        # "predictedCongestionIndex": [],
         "predictedFlow": [],
-        "PredictedCo2Equivalent": [],
+        # "PredictedCo2Equivalent": [],
         "@context": [
             "https://easy-global-market.github.io/c2jn-data-models/jsonld-contexts/c2jn-compound.jsonld"
         ],
@@ -274,37 +185,44 @@ def data_convert_to_ngsild(data: DataFrame, area_code: str):
 
     # Populate data structure
     for index, row in df.iterrows():
+        uuid_code = generate_uuid(index)
         observed_at = format_datetime(row["DateTime"])
 
         # Populate the averageVehicleSpeed
-        traffic_data["predictedAverageVehicleSpeed"].append(
-            {
-                "type": "Property",
-                "value": row["AverageVehicleSpeed"],
-                "observedAt": observed_at,
-                "unitCode": "KMH",
-            }
-        )
+        traffic_data["predictedAverageVehicleSpeed"] = {
+            "type": "Property",
+            "value": row["AverageVehicleSpeed"],
+            "observedAt": observed_at,
+            "unitCode": "KMH",
+            "predictedBy": {
+                "type": "Relationship",
+                "object": f"urn:ngsi-ld:DataServiceProcessing:TrafficFlowPrediction:{model_id}",
+            },
+        }
 
         # Populate the congestionIndex
-        traffic_data["predictedCongestionIndex"].append(
-            {
-                "type": "Property",
-                "value": row["CongestionIndex"],
-                "observedAt": observed_at,
-                "unitCode": "P1",
-            }
-        )
+        traffic_data["predictedCongestionIndex"] = {
+            "type": "Property",
+            "value": row["CongestionIndex"],
+            "observedAt": observed_at,
+            "unitCode": "P1",
+            "predictedBy": {
+                "type": "Relationship",
+                "object": f"urn:ngsi-ld:DataServiceProcessing:TrafficFlowPrediction:{model_id}",
+            },
+        }
 
         # Populate the co2Equivalent
-        traffic_data["PredictedCo2Equivalent"].append(
-            {
-                "type": "Property",
-                "value": row["CO2Equivalent"],
-                "observedAt": observed_at,
-                "unitCode": "TNE",
-            }
-        )
+        traffic_data["PredictedCo2Equivalent"] = {
+            "type": "Property",
+            "value": row["CO2Equivalent"],
+            "observedAt": observed_at,
+            "unitCode": "TNE",
+            "predictedBy": {
+                "type": "Relationship",
+                "object": f"urn:ngsi-ld:DataServiceProcessing:TrafficFlowPrediction:{model_id}",
+            },
+        }
 
         # Populate the predicted flow for each vehicle type, use appropriate column names from your DataFrame
         traffic_data["predictedFlow"].extend(
@@ -316,138 +234,189 @@ def data_convert_to_ngsild(data: DataFrame, area_code: str):
                     + row[
                         "HeavyVehicle Value"
                     ],  # This should be a column in your DataFrame
-                    "observedAt": observed_at,
                     "unitCode": "E50",
-                    "datasetId": "urn:ngsi-ld:Dataset:All",
-                    "vehicleType": {"type": "Property", "value": "All"},
+                    "datasetId": f"urn:ngsi-ld:Dataset:All{uuid_code}",
+                    "observedAt": observed_at,
+                    # "vehicleType": {"type": "Property", "value": "All"},
+                    "predictedBy": {
+                        "type": "Relationship",
+                        "object": f"urn:ngsi-ld:DataServiceProcessing:TrafficFlowPrediction:{model_id}",
+                    },
                 },
                 {
                     "type": "Property",
                     "value": row["LightVehicle Value"],
-                    "observedAt": observed_at,
                     "unitCode": "E50",
-                    "datasetId": "urn:ngsi-ld:Dataset:LightVehicle",
-                    "vehicleType": {"type": "Property", "value": "Light Vehicle"},
+                    "datasetId": f"urn:ngsi-ld:Dataset:LightVehicle{uuid_code}",
+                    "observedAt": observed_at,
+                    # "vehicleType": {"type": "Property", "value": "Light Vehicle"},
+                    "predictedBy": {
+                        "type": "Relationship",
+                        "object": f"urn:ngsi-ld:DataServiceProcessing:TrafficFlowPrediction:{model_id}",
+                    },
                 },
                 {
                     "type": "Property",
                     "value": row["CommercialVehicle Value"],
-                    "observedAt": observed_at,
                     "unitCode": "E50",
-                    "datasetId": "urn:ngsi-ld:Dataset:CommercialVehicle",
-                    "vehicleType": {"type": "Property", "value": "Commercial Vehicle"},
+                    "datasetId": f"urn:ngsi-ld:Dataset:CommercialVehicle{uuid_code}",
+                    "observedAt": observed_at,
+                    # "vehicleType": {"type": "Property", "value": "Commercial Vehicle"},
+                    "predictedBy": {
+                        "type": "Relationship",
+                        "object": f"urn:ngsi-ld:DataServiceProcessing:TrafficFlowPrediction:{model_id}",
+                    },
                 },
                 {
                     "type": "Property",
                     "value": row["HeavyVehicle Value"],
-                    "observedAt": observed_at,
                     "unitCode": "E50",
-                    "datasetId": "urn:ngsi-ld:Dataset:HeavyWeight",
-                    "vehicleType": {"type": "Property", "value": "Heavy Weight"},
+                    "datasetId": f"urn:ngsi-ld:Dataset:HeavyWeight{uuid_code}",
+                    "observedAt": observed_at,
+                    # "vehicleType": {"type": "Property", "value": "Heavy Weight"},
+                    "predictedBy": {
+                        "type": "Relationship",
+                        "object": f"urn:ngsi-ld:DataServiceProcessing:TrafficFlowPrediction:{model_id}",
+                    },
                 },
             ]
         )
-        return traffic_data
+    return traffic_data
+
+
+def send_prediction_to_broker(area_code, traffic_data):
+    global ACCESS_TOKEN
+    global CLIENT_ID
+    global CLIENT_SECRET
+    authenticate(CLIENT_ID, CLIENT_SECRET)
+
+    access_token = ACCESS_TOKEN
+
+    api_url = f"https://api-gw.stellio.c2jn.fr/ngsi-ld/v1/entities/urn:ngsi-ld:TrafficFlowObserved:{area_code}/attrs"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "NGSILD-Tenant": "urn:ngsi-ld:tenant:smart-city",
+        "Content-Type": "application/ld+json",
+    }
+
+    json_data = json.dumps(traffic_data, indent=4)
+
+    try:
+        response = requests.patch(api_url, headers=headers, data=json_data)
+        print(response.status_code)
+
+        if response.status_code != 204:
+            print(response.json())
+            raise HTTPException(
+                status_code=400, detail="Failed to send data to broker."
+            )
+        print("Successfuly sent data to broker.")
+        # return {"message": "Successfuly sent data to broker."}
+
+    except HTTPException:
+        print("Failed to send data to broker.")
+        # return {"message": "Failed to send data to broker."}
 
 
 # FastAPI
 app = FastAPI()
 
 
-@app.get("/train_ecomob_model")
-async def train_ecomob_model(
-    background_tasks: BackgroundTasks,
-    client_id: str,
-    client_secret: str,
+@app.get("/predict_next_24hr_with_ecomob_model")
+async def predict_next_24hr_with_ecomob_model(
     area_code: str,
     timeAt: str,
-    epochs=20,
-    batch_size=1,
     look_back=72,
 ):
-    global ecomob_model
+    data = fetch_data_c2jn_broker(area_code=area_code, timeAt=timeAt)
 
-    if (
-        not client_id
-        or not client_secret
-        or not area_code
-        or not timeAt
-        or not epochs
-        or not batch_size
-        or not look_back
-    ):
-        raise HTTPException(status_code=400, detail="Missing required parameters.")
-
-    data = fetch_data_c2jn_broker(client_id, client_secret, area_code, timeAt)
     if data is not None:
         parse_data = parse_ecomob_data(data)
 
-        epochs = 20
-        batch_size = 1
-        look_back = 72
-        save = True
-        background_tasks.add_task(
-            train_Ecomob_LSTM_model, parse_data, epochs, batch_size, look_back, save
+        ecomob_model = EcomobLSTMmodel(model_path=MODEL_PATH)
+        predictions = ecomob_model.predict_next_24hr(
+            parse_data, look_back=int(look_back)
         )
-        return {"message": "Training model for Ecomob data has started."}
+
+        ngsild_data = data_convert_to_ngsild(
+            predictions, area_code=area_code, model_id=MODEL_ID
+        )
+        return ngsild_data
     else:
-        return {"message": "Failed to get data or data not available."}
+        return {"message": "Failed to fetch data."}
 
 
-@app.get("/predict_next_day_with_ecomob_model")
-async def predict_next_day_with_ecomob_model(
-    client_id: str,
-    client_secret: str,
+@app.get("/predict_with_ecomob_model")
+async def predict_with_ecomob_model(
     area_code: str,
     timeAt: str,
+    steps: int,
     look_back=72,
-    model_path: Optional[str] = None,
 ):
-    global ecomob_model
+    data = fetch_data_c2jn_broker(area_code=area_code, timeAt=timeAt)
 
-    data = fetch_data_c2jn_broker(client_id, client_secret, area_code, timeAt)
-    if data is None:
-        return {"message": "Failed to get previous data or data not available."}
-    parse_data = parse_ecomob_data(data)
+    if data is not None:
+        parse_data = parse_ecomob_data(data)
 
-    if model_path is not None:
-        predictions_df = predict_next_day_with_Ecomob_model(
-            None,
-            parse_data,
-            look_back=72,
-            model_path=model_path,
+        ecomob_model = EcomobLSTMmodel(model_path=MODEL_PATH)
+        predictions = ecomob_model.predict_steps(
+            parse_data, steps=steps, look_back=int(look_back)
         )
-    else:
-        if ecomob_model is None:
-            return {"message": "No pretrained model available."}
-        else:
-            predictions_df = predict_next_day_with_Ecomob_model(
-                ecomob_model,
-                parse_data,
-                look_back=72,
-            )
 
-    ngsild_data = data_convert_to_ngsild(predictions_df, area_code)
-    return ngsild_data
+        ngsild_data = data_convert_to_ngsild(
+            predictions, area_code=area_code, model_id=MODEL_ID
+        )
+
+        alist = ngsild_data["predictedFlow"]
+        for _ in range(24 * 4):
+            alist.pop(0)
+        ngsild_data["predictedFlow"] = alist
+
+        ngsild_data_str = json.dumps(ngsild_data, indent=4)
+        with open("predictions_30Apr2024_15May2024.json", "w") as file:
+            file.write(ngsild_data_str)
+
+        send_prediction_to_broker(area_code, ngsild_data)
+        return ngsild_data
+    else:
+        return {"message": "Failed to fetch data."}
 
 
 if __name__ == "__main__":
-    # client_id = "imt"
-    # client_secret = "B9ujTPZipkJcRG9xFuxTMFsp3TvdmHzN"
-    # area_code = "ILM_92130_2385"
+    if (
+        MODEL_PATH is None
+        or CLIENT_ID is None
+        or CLIENT_SECRET is None
+        or MODEL_ID is None
+    ):
+        if MODEL_PATH is None:
+            print("MODEL_PATH is not defined")
+        if CLIENT_ID is None:
+            print("CLIENT_ID is not defined")
+        if CLIENT_SECRET is None:
+            print("CLIENT_SECRET is not defined")
+        if MODEL_ID is None:
+            print("MODEL_ID is not defined")
+        sys.exit()
+
+    auth_status = authenticate(CLIENT_ID, CLIENT_SECRET)
+    if auth_status:
+        print("Authentication Success.")
+        # print("Access Token: ", ACCESS_TOKEN)
+    else:
+        sys.exit()
+
+    # area_code = "ILM_92130_6556"
     # timeAt = "2023-05-01T07:00:00Z"
     #
-    # data = fetch_data_c2jn_broker(client_id, client_secret, area_code, timeAt)
-    # parse_data = parse_ecomob_data(data)
-    # # ecomob_model = train_Ecomob_LSTM_model(
-    # #    parse_data, epochs=20, batch_size=1, look_back=72, save=True
-    # # )
-    # predictions_df = predict_next_day_with_Ecomob_model(
-    #     None,
-    #     parse_data,
-    #     look_back=72,
-    #     model_path="lstm_mdoel_2024-04-23_13-39-57.keras",
-    # )
-    # ngsild_data = data_convert_to_ngsild(predictions_df, area_code)
-    # print(ngsild_data)
+    # data = fetch_data_c2jn_broker(area_code=area_code, timeAt=timeAt)
+    #
+    # if data is not None:
+    #     parse_data = parse_ecomob_data(data)
+    #
+    #     ecomob_model = EcomobLSTMmodel()
+    #     ecomob_model.train_model(
+    #         parse_data, lr=0.01, epochs=20, batch_size=1, look_back=72, save=True
+    #     )
+
     uvicorn.run(app, host="0.0.0.0", port=9000)
